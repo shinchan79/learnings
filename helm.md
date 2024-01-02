@@ -206,4 +206,59 @@ Helm provides a provenance feature to establish verification about a package’s
 - A chart provides a pattern for producing the same Kubernetes manifests. But charts also allow users to provide additional configuration.
 - Helm provides patterns for storing configuration so that the combination of a chart plus its configuration can even be done repeatedly.
 - Helm encourages Kubernetes users to package their YAML into charts so that these descriptions can be reused.
-- 
+- Helm was constructed so that all Kubernetes distributions could share the same package manager, and (with very, very few exceptions) the same packages as well. When there are differences between two different Kubernetes distributions, charts can accommodate this using templates coupled with configuration.
+
+#### Configurability
+- Helm provides tools to configure packages at installation time, and to reconfigure installations during upgrades.
+- Helm is a package manager. Another class of software handles configuration management. This class of software, typified by Puppet, Ansible, and Chef, focuses on how a given piece of software (often packaged) is specifically configured for its host environment. Its responsibility is to manage configuration changes over time.
+- Helm was not designed to be a configuration management tool
+- Package management is typically confined to implementing three verbs: install, upgrade, and delete. Configuration management is a higher-order concept that focuses on managing an application or applications over time. This is sometimes called “day-two ops.”
+- While Helm did not set out to be a configuration management tool, it is sometimes used as one. Organizations rely upon Helm not just to install, upgrade, and delete, but also to track changes over time, to track configuration, and to determine whether an application as a whole is running. Helm can be stretched this way, but if you want a strong configuration management solution, you may want to leverage other tools in the Helm ecosystem like Helmfile, Flux, and Reckoner
+
+## Helm Architecture
+### Kubernetes Resources
+
+- All Kubernetes resource definitions share a common subset of elements.
+- The following manifest uses a Deployment to illustrate the main structural elements of a resource definition:
+```
+apiVersion: apps/v1 (1)
+kind: Deployment (2)
+metadata: (3)
+    name: example-deployment (4)
+    labels: (5)
+        some-name: some-value
+    annotations: (6)
+        some-name: some-value
+# resource-specific YAML
+```
+(1) The API family and version for this resource.
+
+(2) The kind of resource. Combined with apiVersion, we get the “resource type”.
+
+(3) The metadata section contains top-level data about the resource.
+
+(4) A name is required for almost every resource type.
+
+(5) Labels are used to give Kubernetes query-able “handles” to your resources.
+
+(6) Annotations provide a way for authors to attach their own keys and values to a resource.
+
+a resource type in Kubernetes is composed of three pieces of information:
+- API group (or family): Several base resource types like Pod and ConfigMap omit this name.
+- PI version: Expressed as a v, followed by a major version and an optional stability marker. For example, v1 is a stable “version 1,” while v1alpha indicates an unstable “version 1 alpha 1.”
+- Resource kind: The (capitalized) name of the specific resource within the API group.
+
+### Charts
+- In Helm’s vocabulary, a package is called a chart.
+- A chart plots the way a Kubernetes application should be installed.
+- A chart contains a file called `Chart.yaml` that describes the chart. It has information about the chart version, the name and description of the chart, and who authored the chart.
+- A chart contains `templates` as well. These are Kubernetes manifests (like we saw earlier in this chapter) that are potentially annotated with templating directives.
+- A chart may also contain a `values.yaml` file that provides default configuration. This file contains parameters that you can override during installation and upgrade.
+  
+When you see a Helm chart, though, it may be presented in either unpacked or packed form.
+- An unpacked Helm chart is just a directory. Inside, it will have a Chart.yaml, a values.yaml, a templates/ directory, and perhaps other things as well.
+- A packed Helm chart contains the same information as an unpacked one, but it is tarred and gzipped into a single file.
+
+An unpacked chart is represented by a directory with the name of the chart. For example, the chart named `mychart` will be unpacked into a directory named `mychart/`. In contrast, a packed chart has the name and version of the chart, as well as the `tgz` suffix: `mychart-1.2.3.tgz`.
+
+Charts are stored in chart repositories. Helm knows how to download and install charts from repositories.
