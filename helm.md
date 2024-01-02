@@ -262,3 +262,19 @@ When you see a Helm chart, though, it may be presented in either unpacked or pac
 An unpacked chart is represented by a directory with the name of the chart. For example, the chart named `mychart` will be unpacked into a directory named `mychart/`. In contrast, a packed chart has the name and version of the chart, as well as the `tgz` suffix: `mychart-1.2.3.tgz`.
 
 Charts are stored in chart repositories. Helm knows how to download and install charts from repositories.
+
+### Resources, Installations, and Releases
+when a Helm chart is installed into Kubernetes, this is what happens:
+1. Helm reads the chart (downloading if necessary).
+2. It sends the values into the templates, generating Kubernetes manifests.
+3. The manifests are sent to Kubernetes.
+4. Kubernetes creates the requested resources inside of the cluster.
+
+When a Helm chart is installed, Helm will generate as many resource definitions as it needs. Some may create one or two, others may create hundreds. When Kubernetes receives these definitions, it will create resources for them.
+
+A Helm chart may have many resource definitions. Kubernetes sees each of these as a discrete thing. But in Helm’s view all of the resources defined by a chart are related.
+
+For example, my WordPress application may have a Deployment, a ConfigMap, a Service, and so on. But they are all part of one chart. And when I install them, they are all part of the same installation. 
+
+The same chart can be installed more than once (with a different name each time). Thus, I may have multiple installations of the same chart, just as I might have multiple resources of the same Kubernetes resource type.
+
