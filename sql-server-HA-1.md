@@ -1,3 +1,4 @@
+Git repo: https://github.com/TrainingByPackt/Professional-SQL-Server-High-Availability-and-Disaster-Recovery
 # Getting Started with SQL Server HA and DR
 ## SQL Server HA and DR Solutions
 ### Windows Server Failover Cluster Installation
