@@ -54,3 +54,38 @@ There's also a queue reader agent that's used in bidirectional transactional rep
 ### Transactional Replication
 - replicates the transactions as and when they are committed at the publisher to the subscribers.
 - one of the most commonly used replications to load balance read-write workloads.
+- The writes are done at the publisher and the reads (or reporting) are done at the subscriber, thereby eliminating read-write blocking.
+-  the subscriber database can be better indexed to speed up the reads and the publisher database can be optimized for Data Manipulation Language (DML) operations.
+-  The agents are implemented as SQL agent jobs, that is, there's a SQL agent job for a log reader agent and a SQL agent job for the distribution agent.
+-  two other transactional replications that allow changes to flow from subscriber to publisher: transactional replication with updatable subscription (bidirectional transactional replication) and peer-to-peer transactional replication.
+### Merge Replication
+- replicates changes from publishers to subscribers and from subscribers to publishers.
+- Merge replication has a built-in mechanism to detect and resolve conflicts; however, in some cases, it may get difficult to troubleshoot conflicts. This makes it the most complex replication type available in SQL Server.
+- Merge replication uses the merge agent to initialize subscribers and merge changes. Unlike transaction replication, where the snapshot agent is used to initialize subscribers, in merge replication, the snapshot agent only creates the snapshot. The merge agent applies that snapshot and starts replicating the changes thereafter.
+### Snapshot Replication
+- Snapshot replication generates a snapshot of the articles to be replicated and applies it to the subscriber.
+- The snapshot replication can be run on demand or as per schedule. It's the simplest form of replication and is also used to initialize transactional and merge replication.
+### Configuring Snapshot Replication Using SQL Server Management Studio
+## Optimizing Snapshot Replication
+### Snapshot Replication Best Practices
+#### Minimizing Logging at Subscriber
+Snapshot replication uses bcp to bulk insert data from the publisher to the subscriber database. It's therefore advised to switch to a bulk-logged or simple recovery model to minimize logging and optimize bulk insert performance.
+
+https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/recovery-models-sql-server?view=sql-server-2017
+
+#### Minimizing Locking
+- snapshot generation applies exclusive locks on tables until the snapshot is generated. This stops any other applications from accessing the tables, resulting in blocking.
+
+Options to minimize blocking:
+- **Change the isolation level to read-committed snapshot to avoid read-write blocking**. You'll have to research and find out how the read-committed snapshot will not affect any other application or functionality of your environment.
+- Another way to avoid read-write blocking is to selectively use the **NoLock query hint**. This is not a good practice; however, it's being used in many applications to fix read-write blocking.
+- **Schedule snapshot generation at off-peak hours** when there is less workload on the server.
+#### Replicating Only Required Articles
+Replicating all articles in a large database will take time and resources for snapshot generation.
+#### Using Pull Subscription
+- In pull subscription, the distribution agent is on the subscriber and not on the distributor. This reduces workload on the distributor. Moreover, if the publisher is acting as its own distributor, its workload is reduced.
+#### Compressing the Snapshot Folder
+compress snapshot files in the .cab format. This reduces the size of the snapshot files and speeds up network transfer. However, it takes time to compress the files by the snapshot agent and decompress by the distribution agent.
+
+### Modifying Agent Parameters
+
