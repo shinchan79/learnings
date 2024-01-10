@@ -66,6 +66,11 @@ There's also a queue reader agent that's used in bidirectional transactional rep
 ### Snapshot Replication
 - Snapshot replication generates a snapshot of the articles to be replicated and applies it to the subscriber.
 - The snapshot replication can be run on demand or as per schedule. It's the simplest form of replication and is also used to initialize transactional and merge replication.
+<<<<<<< HEAD
+=======
+![snapshot-replication-example](./images/snapshot-replication-example.jpg)
+
+>>>>>>> master
 ### Configuring Snapshot Replication Using SQL Server Management Studio
 ## Optimizing Snapshot Replication
 ### Snapshot Replication Best Practices
@@ -90,3 +95,4 @@ compress snapshot files in the .cab format. This reduces the size of the snapsho
 
 ### Modifying Agent Parameters
 
+![The-Agent-Parameters-table](./images/The-Agent-Parameters-table.jpg)
