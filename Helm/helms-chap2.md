@@ -16,3 +16,6 @@ Most common workflow for starting out with Helm:
 
 # Adding a Chart repository
 - A Helm chart is an individual package that can be installed into your Kubernetes cluster. 
+- A Helm chart repository is simply a set of files, reachable over the network, that conforms to the Helm specification for indexing packages.
+[the Artifact Hub ](https://artifacthub.io/)https://artifacthub.io/
+
