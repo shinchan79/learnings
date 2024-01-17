@@ -115,6 +115,14 @@ This Chart.yaml file contains numerous keys, of which only three are required.
 - The final required key is version, containing the version of the chart.
 
 # Modifying Templates
+Helm is written in the Go programming language, and Go includes template packages. Helm leverages the text template package as the foundation for its templates. This template language is similar to other template languages and includes loops, if/then logic, functions, and more. An example template of a YAML file follows:
+```
+product: {{ .Values.product | default "rocket" | quote }}
+```
+In this YAML file there is a key name of `product`. The value is generated using a template. `{{ and }}` are the opening and closing brackets to enter and exit template logic. There are three parts to the template logic separated by a `|`. This is called a pipeline, and it works the same way as a pipeline in Unix-based systems. The value or output of a function on the left is passed in as the last argument to the next item in the pipeline. In this case, the pipeline starts with the value from the property in `.Values.product.` This comes from the data object passed in when the templates are rendered. The value of this data is piped as the last argument to the default function, which is one of the functions provided by Helm. If the value passed in is empty, the default function uses the default value of "rocket", ensuring there is a value. This is then sent to the quote function, which ensures the string is wrapped in quotes before writing it to the template.
+
+The `.` at the start of `.Values.product` is important. This is considered the root object in the current scope. `.Values` is a property on the root object.
+
 ## The Deployment
 Helm charts can hold templates for any Kubernetes resource type you might use. That includes StatefulSets, Jobs, PersistentVolumeClaims, Services, and much more. The chart created with helm create is designed to run a stateless service as a Kubernetes Deployment. 
 
@@ -127,6 +135,245 @@ metadata:
   labels:
     {{- include "anvil.labels" . | nindent 4 }}
 ```
+Once you get into the `metadata` you’ll notice the templating begins.
+
+The `include` template function enables including the output of one template in another template, and this works in pipelines. 
+
+anvil.fullname and anvil.labels are two reusable templates included in the chart via the _helpers.tpl file. (The _ at the start of the name causes it to bubble up to the top of directory listings so you can easily find it among your templates; Helm does not render them into Kubernetes manifests but does make templates in them available for use.) anvil.fullname provides a name based on the name chosen when the chart is instantiated, and anvil.labels provides labels following Kubernetes best practices.
+
+After the `metadata` section of the template is the `spec` section, which reads as follows:
+```
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "anvil.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "anvil.selectorLabels" . | nindent 8 }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "anvil.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default↵
+            .Chart.AppVersion }}" (1)
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+```
+(1) The location and version of the container image is configurable via values.
+
+# Using the Values File
+Charts include a values.yaml file that sits alongside the Chart.yaml file in the root of a chart. The values.yaml file contains the default values used by the chart, and it is a form of documentation for the custom values that can be passed into a chart.
+
+values.yaml is an unstructured YAML file. There are some common and useful practices, which will be covered shortly, but nothing is required in the format of the YAML. This enables chart creators to provide a structure and information that works well for them. A values.yaml file can contain numerous things, from simple substitution for Kubernetes manifest properties to elements needed for application-specific business logic.
+
+## Container Images
+The opening part of the values.yaml file created by helm create contains the image information along with some opening documentation and information on replicas:
+
+```
+# Default values for anvil.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/masterminds/learning-helm/anvil-app (1)
+  pullPolicy: IfNotPresent (2)
+  # Overrides the image tag whose default is the chart version.
+  tag: "" (3)
+
+imagePullSecrets: [] (4)
+```
+
+(1) The location of the image. It has been updated to reflect the location of Anvil.
+
+(2) A policy of IfNotPresent means that the image will be cached in the Kubernetes cluster by the version being used. Always is another option that bypasses the cache and always downloads from the repository.
+
+(3) By default this chart uses the appVersion as the tag. If an image tag is specified, it is used instead of the appVersion.
+
+(4) A list of pull secrets is used when credentials are needed to access a container registry location that is protected with a username and password.
+
+If you need to pull an image from a container registry with access controls, Kubernetes needs to know how to do that. This happens through the use of pull secrets.  `imagePullSecrets` allows you to list the names of pull secrets with access to private registries.
+
+The generated chart has some security considerations built in that can be enabled or otherwise configured. A service account for the chart instance is created by default, while the other options are opt-in. The following is what is generated by `helm create`:
+
+```
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname ↵
+    template
+  name:
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+```
+## Exposing Services
+
+The next section of the `values.yaml` file deals with exposing the application for others to consume:
+
+```
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+```
+
+In Kubernetes there are two built-in objects you can use to expose applications. The first is a Service. The service property will let you select the type of `Service` being used. While `ClusterIP` is used by default, other options such as `NodePort` and `LoadBalancer` can be used. The few lines of YAML in the service section are paired with the generated `service.yaml` template to create a full Service manifest to upload to Kubernetes.
+
+The second built-in object is the `Ingress` manifest, which can be paired with a `Service`, and the chart has the capability to generate them. `Ingress` configuration provides a means to show off a common pattern found in charts: the use of an  `enabled` property to turn features on and off. In this case `ingress.enabled` is set to `false`. When Helm renders the templates and sees a value of `false`, the `Ingress` manifest is skipped. This is due to the use of an `if` logic statement in the `Ingress` template found in the generated `ingress.yaml` file.
+
+For a functional ingress setup you need more than an Ingress resource in Kubernetes. The `Ingress` resource you can include in a chart connects the Ingress Controller to a `Service`. You will need to have an Ingress Controller running in your cluster because one is not included by default. The Kubernetes community provides the Nginx Ingress Controller, which is a good default option. ([https://oreil.ly/vc3ed](https://docs.nginx.com/nginx-ingress-controller/)https://docs.nginx.com/nginx-ingress-controller/)
+
+## Resource Limits
+values.yaml:
+```
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as
+  # a conscious choice for the user. This also increases chances charts run on
+  # environments with little resources, such as Minikube. If you do want to
+  # specify resources, uncomment the following lines, adjust them as necessary,
+  # and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+```
+Workloads have the ability to specify details about where they are executed in a cluster by the settings node selector, tolerations, and affinity. Although these more advanced features are often not used, it is a good idea to include them in a chart for those who need them. The generated values.yaml file and templates take this into account. The following example has generated YAML keys for these advanced features. The values are empty by default with an expectation that the person who installs the chart will set values as appropriate for their installation:
+```
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+```
+# Packaging the Chart
+
+Helm has the ability to build a chart archive. Each chart archive is a gzipped TAR file with the extension `.tgz`. Any tool that can create, extract, and otherwise work on gzipped TAR files will work with Helm’s chart archives.
+
+When Helm generates the archive files, they are named using a pattern of `chart-name-version.tgz`. Helm expects this same pattern when consuming them. The `chart name` is the name you will find inside the Chart.yaml file and the version is the chart version. 
+
+You can package Anvil as an archive by running:
+```
+$ helm package anvil
+```
+There are some useful flags you can use when packaging a chart:
+
+- `--dependency-update (-u)`: Tells Helm to update the dependent charts prior to creating the archive. This will update the Chart.lock file and place a copy of the dependent charts in the chart directory.
+- `--destination (-d)`: Enables you to set the location to put the chart archive if it is different from the current working directory.
+- `--app-version`: Can be used to set the `appVersion` property of the Chart.yaml file. This is especially useful if you create new releases of the chart for each new release of your application running within the container and there is no other change to the chart. Automation can use a flag like this as part of the process to build the new version.
+- `--version`: Updates the chart’s version. This is useful if you’re updating the appVersion using the command line as part of the process to package a chart.
+
+Sometimes you will have files in a chart directory that you do not want to include in the chart archive. Optionally, in a chart directory there can be a `.helmignore` file. This is similar to a `.gitignore` file for Git. The helm create command used earlier created one with the following contents:
+
+```
+# Patterns to ignore when building packages.
+# This supports shell glob matching, relative path matching, and
+# negation (prefixed with !). Only one pattern per line.
+.DS_Store
+# Common VCS dirs
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+# Common backup files
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# Various IDEs
+.project
+.idea/
+*.tmproj
+.vscode/
+```
+When the chart archive is created, you usually don’t want to include elements like your version control system data. The .helmignore file provides a place to specify what to skip. This file needs to be at the top level of the chart.
+
+Helm is designed to work with the archive files the same way it works with directory structures. Commands like `helm install` and `helm lint`, which will be covered shortly, can be passed an archive file the same way they can be passed a directory.
+
+# Linting Charts
+
+To help you catch errors, bugs, style issues, and other suspicious elements, the Helm client includes a linter. This linter can be used during chart development and as part of any testing processes.
+
+To use the linter, use the lint command on a chart as a directory or a packaged archive:
+```
+$ helm lint anvil
+==> Linting anvil
+
+1 chart(s) linted, 0 chart(s) failed
+```
+This command is able to lint multiple charts in a single command. For example, if you had a second chart called mychart and wanted to lint it alongside anvil, you could run the following command:
+```
+$ helm lint anvil mychart
+```
+By default, warning messages cause Helm to have an exit code of 0, but Helm adds a `--strict` flag that causes the exit codes to be nonzero. You can choose how to handle these in automation.
+
+
+
 
 
 
